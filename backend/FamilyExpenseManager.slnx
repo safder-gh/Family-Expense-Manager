@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="FamilyExpense.Api.Tests/FamilyExpense.Api.Tests.csproj" />
+  <Project Path="FamilyExpense.Api/FamilyExpense.Api.csproj" />
+</Solution>
