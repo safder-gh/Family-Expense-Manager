@@ -44,6 +44,8 @@ public sealed class AuthController(
         }
 
         db.Wallets.Add(new Wallet { FamilyId = family.Id, OwnerUserId = user.Id });
+        db.ExpenseCategories.AddRange(ExpenseCategory.DefaultNames.Select(name =>
+            new ExpenseCategory { FamilyId = family.Id, Name = name }));
         await db.SaveChangesAsync();
         var token = await tokens.CreateTokenAsync(user, family.Name);
         await transaction.CommitAsync();

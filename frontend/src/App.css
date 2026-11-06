@@ -272,6 +272,18 @@
 .action-card label { gap: 6px; font-size: 9px; }
 .action-card input, .action-card select { min-height: 35px; padding: 0 9px; font-size: 10px; }
 .action-card .button { min-height: 35px; margin-top: 1px; font-size: 9px; }
+.category-manager { display: grid; gap: 12px; margin-top: 14px; padding: 15px; border: 1px solid #e9ede9; border-radius: 11px; background: #fff; }
+.category-manager h3 { margin: 4px 0; color: #35493d; font-size: 12px; }
+.category-manager p { margin: 0; color: #89948d; font-size: 9px; }
+.category-create, .category-item { display: flex; gap: 7px; }
+.category-manager input { min-width: 0; min-height: 34px; box-sizing: border-box; border: 1px solid #dfe5df; border-radius: 7px; padding: 0 9px; color: #21382e; font: inherit; font-size: 10px; }
+.category-create input { flex: 1; }
+.category-manager .button { min-height: 34px; padding: 0 11px; font-size: 9px; }
+.category-list { display: grid; gap: 7px; }
+.category-item input { flex: 1; }
+.category-delete { border: 0; padding: 0 8px; background: transparent; color: #a76759; font-size: 9px; cursor: pointer; }
+.category-delete:disabled { cursor: wait; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 .optional { color: #a2aaa5; font-weight: 450; }
 .activity-section { margin-top: 31px; }
 .activity-section .section-heading { margin-bottom: 9px; }

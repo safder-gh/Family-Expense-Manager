@@ -51,6 +51,17 @@ public class CreateTransactionRequest
     public string? Description { get; init; }
 }
 
+public sealed class CreateExpenseRequest : CreateTransactionRequest
+{
+    public required Guid CategoryId { get; init; }
+}
+
+public sealed class ExpenseCategoryRequest
+{
+    [Required, StringLength(60, MinimumLength = 1)]
+    public required string Name { get; init; }
+}
+
 public sealed class TransferRequest : CreateTransactionRequest
 {
     [Required]
@@ -61,7 +72,8 @@ public sealed record AuthResponse(string Token, string UserId, string DisplayNam
 public sealed record InviteResponse(string Code, DateTime ExpiresAtUtc);
 public sealed record MemberResponse(string UserId, string DisplayName, string Email, string Role, long BalanceMinor);
 public sealed record FamilyResponse(Guid FamilyId, string FamilyName, string CurrentUserId, string CurrentRole, long CurrentBalanceMinor, IReadOnlyList<MemberResponse> Members);
-public sealed record TransactionResponse(Guid Id, string Type, long AmountMinor, string Description, DateTime CreatedAtUtc, string? FromUserId, string? ToUserId, string? FromDisplayName, string? ToDisplayName, string CreatedByDisplayName);
+public sealed record ExpenseCategoryResponse(Guid Id, string Name);
+public sealed record TransactionResponse(Guid Id, string Type, long AmountMinor, string Description, DateTime CreatedAtUtc, string? FromUserId, string? ToUserId, string? FromDisplayName, string? ToDisplayName, string CreatedByDisplayName, string? CategoryName);
 
 public static class TransactionAmount
 {

@@ -10,6 +10,7 @@ public sealed class FamilyDbContext(DbContextOptions<FamilyDbContext> options)
     public DbSet<Family> Families => Set<Family>();
     public DbSet<Wallet> Wallets => Set<Wallet>();
     public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
+    public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
     public DbSet<FamilyInvite> FamilyInvites => Set<FamilyInvite>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -38,6 +39,23 @@ public sealed class FamilyDbContext(DbContextOptions<FamilyDbContext> options)
             .HasConversion<string>();
         builder.Entity<WalletTransaction>()
             .HasIndex(transaction => new { transaction.FamilyId, transaction.CreatedAtUtc });
+
+        builder.Entity<ExpenseCategory>()
+            .Property(category => category.Name)
+            .UseCollation("NOCASE");
+        builder.Entity<ExpenseCategory>()
+            .HasIndex(category => new { category.FamilyId, category.Name })
+            .IsUnique();
+        builder.Entity<ExpenseCategory>()
+            .HasOne<Family>()
+            .WithMany()
+            .HasForeignKey(category => category.FamilyId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<WalletTransaction>()
+            .HasOne<ExpenseCategory>()
+            .WithMany()
+            .HasForeignKey(transaction => transaction.CategoryId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<FamilyInvite>()
             .HasIndex(invite => invite.CodeHash)

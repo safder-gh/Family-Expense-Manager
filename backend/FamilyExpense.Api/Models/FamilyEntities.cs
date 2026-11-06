@@ -40,9 +40,19 @@ public sealed class WalletTransaction
     public required string CreatedByUserId { get; set; }
     public string? FromUserId { get; set; }
     public string? ToUserId { get; set; }
+    public Guid? CategoryId { get; set; }
     public long AmountMinor { get; set; }
     public required string Description { get; set; }
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class ExpenseCategory
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid FamilyId { get; set; }
+    public required string Name { get; set; }
+
+    public static IReadOnlyList<string> DefaultNames { get; } = ["Food", "Travel", "Health", "Other"];
 }
 
 public sealed class FamilyInvite

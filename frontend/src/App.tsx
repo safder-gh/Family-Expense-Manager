@@ -37,7 +37,9 @@ type LedgerEntry = {
   fromDisplayName: string | null
   toDisplayName: string | null
   createdByDisplayName: string
+  categoryName: string | null
 }
+type ExpenseCategory = { id: string; name: string }
 type Invite = { code: string; expiresAtUtc: string }
 type AuthMode = 'login' | 'create' | 'join'
 
@@ -77,6 +79,7 @@ function App() {
   )
   const [family, setFamily] = useState<Family | null>(null)
   const [transactions, setTransactions] = useState<LedgerEntry[]>([])
+  const [categories, setCategories] = useState<ExpenseCategory[]>([])
   const [invite, setInvite] = useState<Invite | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -84,13 +87,15 @@ function App() {
 
   const refresh = useCallback(async () => {
     if (!token) return
-    const [familyData, ledger] = await Promise.all([
+    const [familyData, ledger, familyCategories] = await Promise.all([
       api<Family>('/api/family', token),
       api<LedgerEntry[]>('/api/transactions', token),
+      api<ExpenseCategory[]>('/api/expense-categories', token),
     ])
     startTransition(() => {
       setFamily(familyData)
       setTransactions(ledger)
+      setCategories(familyCategories)
     })
   }, [token])
 
@@ -115,6 +120,7 @@ function App() {
     setToken(null)
     setFamily(null)
     setTransactions([])
+    setCategories([])
     setInvite(null)
     setError('')
     setNotice('')
@@ -180,6 +186,7 @@ function App() {
         body: JSON.stringify({
           amount: Number(values.amount),
           description: values.description,
+          ...(values.categoryId ? { categoryId: values.categoryId } : {}),
           ...extra,
           ...(values.recipientUserId ? { recipientUserId: values.recipientUserId } : {}),
         }),
@@ -189,6 +196,67 @@ function App() {
       setNotice(success)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save this transaction.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function addCategory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!token) return
+    const form = event.currentTarget
+    const values = Object.fromEntries(new FormData(form).entries())
+    setError('')
+    setNotice('')
+    setBusy(true)
+    try {
+      await api('/api/expense-categories', token, {
+        method: 'POST',
+        body: JSON.stringify({ name: values.name }),
+      })
+      form.reset()
+      await refresh()
+      setNotice('Category created.')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not create the category.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function renameCategory(event: FormEvent<HTMLFormElement>, categoryId: string) {
+    event.preventDefault()
+    if (!token) return
+    const form = event.currentTarget
+    const values = Object.fromEntries(new FormData(form).entries())
+    setError('')
+    setNotice('')
+    setBusy(true)
+    try {
+      await api(`/api/expense-categories/${categoryId}`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ name: values.name }),
+      })
+      await refresh()
+      setNotice('Category renamed.')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not rename the category.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteCategory(categoryId: string) {
+    if (!token) return
+    setError('')
+    setNotice('')
+    setBusy(true)
+    try {
+      await api(`/api/expense-categories/${categoryId}`, token, { method: 'DELETE' })
+      await refresh()
+      setNotice('Category deleted.')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not delete the category.')
     } finally {
       setBusy(false)
     }
@@ -431,10 +499,39 @@ function App() {
                   <h3>Log an expense</h3>
                   <p>Keep track of spending from your wallet.</p>
                   <label>Amount<input name="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required /></label>
+                  <label>Category
+                    <select name="categoryId" required defaultValue="">
+                      <option value="" disabled>Choose a category</option>
+                      {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                    </select>
+                  </label>
                   <label>What was it for?<input name="description" maxLength={160} placeholder="e.g. Groceries" /></label>
                   <button className="button button-primary full-width" disabled={busy}>Add expense <span>→</span></button>
                 </form>
               </div>
+              <section className="category-manager" aria-labelledby="category-heading">
+                <div>
+                  <span className="eyebrow">FAMILY SETTINGS</span>
+                  <h3 id="category-heading">Expense categories</h3>
+                  <p>Manage the categories everyone in your family can use.</p>
+                </div>
+                <form className="category-create" onSubmit={(event) => void addCategory(event)}>
+                  <label className="visually-hidden" htmlFor="new-category">New category name</label>
+                  <input id="new-category" name="name" placeholder="e.g. Education" maxLength={60} required />
+                  <button className="button button-secondary" disabled={busy}>Add</button>
+                </form>
+                <div className="category-list">
+                  {categories.map((category) => (
+                    <form className="category-item" key={`${category.id}-${category.name}`} onSubmit={(event) => void renameCategory(event, category.id)}>
+                      <label className="visually-hidden" htmlFor={`category-${category.id}`}>Rename {category.name}</label>
+                      <input id={`category-${category.id}`} name="name" defaultValue={category.name} maxLength={60} required />
+                      <button className="button button-secondary" disabled={busy}>Save</button>
+                      <button className="category-delete" type="button" disabled={busy} onClick={() => void deleteCategory(category.id)}>Delete</button>
+                    </form>
+                  ))}
+                </div>
+                <span className="field-hint">Categories attached to expenses cannot be deleted.</span>
+              </section>
               {family.currentRole === 'Head' && dependents.length === 0 && (
                 <div className="empty-members"><span>♧</span><strong>Bring your family in</strong><p>Create a secure, one-time invite so a dependent can join and receive money.</p><button className="button button-secondary" onClick={() => void createInvite()} disabled={busy}>Create an invite</button></div>
               )}
@@ -457,7 +554,7 @@ function App() {
                           <span className={`activity-icon ${entry.type.toLowerCase()}`}>{entry.type === 'TopUp' ? '＋' : entry.type === 'Transfer' ? '↗' : '−'}</span>
                           <div className="activity-description">
                             <strong>{entry.description}</strong>
-                            <span>{entry.type === 'TopUp' ? 'Family funds added' : entry.type === 'Transfer' ? `${entry.fromDisplayName ?? 'Family'} → ${entry.toDisplayName ?? 'Family'}` : `${entry.createdByDisplayName} · Expense`}</span>
+                            <span>{entry.type === 'TopUp' ? 'Family funds added' : entry.type === 'Transfer' ? `${entry.fromDisplayName ?? 'Family'} → ${entry.toDisplayName ?? 'Family'}` : `${entry.createdByDisplayName} · Expense${entry.categoryName ? ` · ${entry.categoryName}` : ''}`}</span>
                           </div>
                           <time dateTime={entry.createdAtUtc}>{new Date(entry.createdAtUtc).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time>
                           <strong className={`activity-amount ${isExpense || outgoing ? 'negative' : incoming ? 'positive' : 'neutral'}`}>

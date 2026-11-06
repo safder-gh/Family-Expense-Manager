@@ -82,6 +82,8 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<FamilyDbContext>();
     await db.Database.EnsureCreatedAsync();
+    await EnsureExpenseCategorySchemaAsync(db);
+    await SeedExpenseCategoriesAsync(db);
 
     var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     foreach (var role in new[] { "Head", "Dependent" })
@@ -98,5 +100,88 @@ await using (var scope = app.Services.CreateAsyncScope())
 }
 
 app.Run();
+
+static async Task EnsureExpenseCategorySchemaAsync(FamilyDbContext db)
+{
+    await db.Database.OpenConnectionAsync();
+    try
+    {
+        var connection = db.Database.GetDbConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE TABLE IF NOT EXISTS "ExpenseCategories" (
+                "Id" TEXT NOT NULL CONSTRAINT "PK_ExpenseCategories" PRIMARY KEY,
+                "FamilyId" TEXT NOT NULL,
+                "Name" TEXT NOT NULL,
+                CONSTRAINT "FK_ExpenseCategories_Families_FamilyId"
+                    FOREIGN KEY ("FamilyId") REFERENCES "Families" ("Id") ON DELETE CASCADE
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_ExpenseCategories_FamilyId_Name"
+                ON "ExpenseCategories" ("FamilyId", "Name" COLLATE NOCASE);
+            """;
+        await command.ExecuteNonQueryAsync();
+
+        command.CommandText = "PRAGMA table_info('WalletTransactions')";
+        var hasCategoryId = false;
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                if (reader.GetString(1) == "CategoryId")
+                {
+                    hasCategoryId = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasCategoryId)
+        {
+            command.CommandText = "ALTER TABLE \"WalletTransactions\" ADD COLUMN \"CategoryId\" TEXT NULL";
+            await command.ExecuteNonQueryAsync();
+        }
+    }
+    finally
+    {
+        await db.Database.CloseConnectionAsync();
+    }
+}
+
+static async Task SeedExpenseCategoriesAsync(FamilyDbContext db)
+{
+    var families = await db.Families.Select(family => family.Id).ToListAsync();
+    foreach (var familyId in families)
+    {
+        var names = await db.ExpenseCategories
+            .Where(category => category.FamilyId == familyId)
+            .Select(category => category.Name)
+            .ToListAsync();
+        foreach (var name in ExpenseCategory.DefaultNames)
+        {
+            if (!names.Contains(name, StringComparer.OrdinalIgnoreCase))
+            {
+                db.ExpenseCategories.Add(new ExpenseCategory { FamilyId = familyId, Name = name });
+            }
+        }
+    }
+
+    await db.SaveChangesAsync();
+
+    var categories = await db.ExpenseCategories
+        .Where(category => category.Name == "Other")
+        .ToDictionaryAsync(category => category.FamilyId, category => category.Id);
+    var legacyExpenses = await db.WalletTransactions
+        .Where(entry => entry.Type == LedgerTransactionType.Expense && entry.CategoryId == null)
+        .ToListAsync();
+    foreach (var expense in legacyExpenses)
+    {
+        if (categories.TryGetValue(expense.FamilyId, out var categoryId))
+        {
+            expense.CategoryId = categoryId;
+        }
+    }
+
+    await db.SaveChangesAsync();
+}
 
 public partial class Program;

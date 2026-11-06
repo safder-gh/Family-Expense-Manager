@@ -103,7 +103,7 @@ public sealed class WalletController(FamilyDbContext db, UserManager<Application
     }
 
     [HttpPost("expenses")]
-    public async Task<IActionResult> CreateExpense(CreateTransactionRequest request)
+    public async Task<IActionResult> CreateExpense(CreateExpenseRequest request)
     {
         if (!TryGetFamilyContext(out var userId, out var familyId))
         {
@@ -112,6 +112,13 @@ public sealed class WalletController(FamilyDbContext db, UserManager<Application
         if (!TransactionAmount.TryGetMinorUnits(request.Amount, out var amount))
         {
             return BadRequest(new { message = "Amount must be positive and have no more than two decimal places." });
+        }
+
+        var category = await db.ExpenseCategories.SingleOrDefaultAsync(candidate =>
+            candidate.Id == request.CategoryId && candidate.FamilyId == familyId);
+        if (category is null)
+        {
+            return BadRequest(new { message = "Select a valid category from your family." });
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
@@ -129,6 +136,7 @@ public sealed class WalletController(FamilyDbContext db, UserManager<Application
             Type = LedgerTransactionType.Expense,
             CreatedByUserId = userId,
             FromUserId = userId,
+            CategoryId = category.Id,
             AmountMinor = amount,
             Description = TransactionAmount.NormalizeDescription(request.Description, "Expense")
         });
@@ -158,6 +166,14 @@ public sealed class WalletController(FamilyDbContext db, UserManager<Application
         var names = await db.Users
             .Where(user => participantIds.Contains(user.Id))
             .ToDictionaryAsync(user => user.Id, user => user.DisplayName);
+        var categoryIds = transactions
+            .Where(entry => entry.CategoryId.HasValue)
+            .Select(entry => entry.CategoryId!.Value)
+            .Distinct()
+            .ToList();
+        var categoryNames = await db.ExpenseCategories
+            .Where(category => categoryIds.Contains(category.Id))
+            .ToDictionaryAsync(category => category.Id, category => category.Name);
         var result = transactions.Select(entry => new TransactionResponse(
             entry.Id,
             entry.Type.ToString(),
@@ -168,7 +184,8 @@ public sealed class WalletController(FamilyDbContext db, UserManager<Application
             entry.ToUserId,
             entry.FromUserId is not null ? names.GetValueOrDefault(entry.FromUserId) : null,
             entry.ToUserId is not null ? names.GetValueOrDefault(entry.ToUserId) : null,
-            names.GetValueOrDefault(entry.CreatedByUserId, "Family member")));
+            names.GetValueOrDefault(entry.CreatedByUserId, "Family member"),
+            entry.CategoryId is not null ? categoryNames.GetValueOrDefault(entry.CategoryId.Value) : null));
         return Ok(result);
     }
 
